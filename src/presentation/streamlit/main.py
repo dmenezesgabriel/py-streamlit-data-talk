@@ -8,11 +8,14 @@ from src.infrastructure.llm.langchain.utils import format_question, get_primer
 st.set_page_config(layout="wide")
 
 available_models = {
-    "ChatGPT-4": "gpt-4",
-    "ChatGPT-3.5": "gpt-3.5-turbo",
-    "GPT-3": "text-davinci-003",
-    "GPT-3.5 Instruct": "gpt-3.5-turbo-instruct",
-    "Code Llama": "CodeLlama-34b-Instruct-hf",
+    "ChatGPT-4": {"is_enabled": False, "name": "gpt-4"},
+    "ChatGPT-3.5": {"is_enabled": False, "name": "gpt-3.5-turbo"},
+    "GPT-3": {"is_enabled": False, "name": "text-davinci-003"},
+    "GPT-3.5 Instruct": {
+        "is_enabled": False,
+        "name": "gpt-3.5-turbo-instruct",
+    },
+    "Code Llama": {"is_enabled": True, "name": "CodeLlama-34b-Instruct-hf"},
 }
 
 if "datasets" not in st.session_state:
@@ -48,10 +51,12 @@ with st.sidebar:
 
     with st.expander(":brain: Choose your model(s): ", expanded=True):
         use_model = {}
-        for model_desc, model_name in available_models.items():
-            label = f"{model_desc} ({model_name})"
+        for model_desc, model_properties in available_models.items():
+            label = f"{model_desc} ({model_properties['name']})"
             key = f"key_{model_desc}"
-            use_model[model_desc] = st.checkbox(label, value=True, key=key)
+            use_model[model_desc] = st.checkbox(
+                label, value=model_properties["is_enabled"], key=key
+            )
 
 
 openai_key_col, huggingface_key_col2 = st.columns([1, 1])
@@ -120,7 +125,7 @@ if generate_viz_button and model_count > 0:
                     answer = ""
                     answer = llm_service.get_viz_answer_from_prompt(
                         question_to_ask,
-                        available_models[model_type],
+                        available_models[model_type]["name"],
                     )
                     answer = primer2 + answer
                     print("Model: " + model_type)
