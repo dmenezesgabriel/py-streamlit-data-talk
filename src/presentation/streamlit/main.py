@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 import streamlit as st
 
@@ -18,14 +20,16 @@ available_models = {
     "Code Llama": {"is_enabled": True, "name": "CodeLlama-34b-Instruct-hf"},
 }
 
+
+datasets_urls_files = open("src/resources/dataset_urls.json")
+datasets_urls = json.load(datasets_urls_files)
+datasets_urls_files.close()
+
+
 if "datasets" not in st.session_state:
     datasets = {}
-    datasets["taxis"] = pd.read_csv(
-        "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/raw/taxis.csv"
-    )
-    datasets["tips"] = pd.read_csv(
-        "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv"
-    )
+    datasets["taxis"] = pd.read_csv(datasets_urls["taxis"])
+    datasets["tips"] = pd.read_csv(datasets_urls["tips"])
     st.session_state["datasets"] = datasets
 else:
     datasets = st.session_state["datasets"]

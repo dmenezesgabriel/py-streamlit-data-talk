@@ -1,0 +1,4 @@
+{
+  "taxis": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/raw/taxis.csv",
+  "tips": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv"
+}
