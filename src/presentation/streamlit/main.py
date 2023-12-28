@@ -1,11 +1,10 @@
-import json
-
 import pandas as pd
 import streamlit as st
 
 from src.application.services.llm import LLMService
 from src.infrastructure.llm.langchain.client import LLMClient
 from src.infrastructure.llm.langchain.utils import format_question, get_primer
+from src.utils.resources import ResourceLoader
 
 st.set_page_config(layout="wide")
 
@@ -20,10 +19,9 @@ available_models = {
     "Code Llama": {"is_enabled": True, "name": "CodeLlama-34b-Instruct-hf"},
 }
 
+resource_loader = ResourceLoader()
 
-datasets_urls_files = open("src/resources/dataset_urls.json")
-datasets_urls = json.load(datasets_urls_files)
-datasets_urls_files.close()
+datasets_urls = resource_loader.load_json_file("dataset_urls.json")
 
 
 if "datasets" not in st.session_state:
