@@ -4,33 +4,30 @@ import streamlit as st
 from src.application.services.llm import LLMService
 from src.infrastructure.llm.langchain.client import LLMClient
 from src.infrastructure.llm.langchain.utils import format_question, get_primer
+from src.infrastructure.llm.utils.api_key import (
+    hugging_face_api_key_is_valid,
+    openai_api_key_is_valid,
+)
+from src.presentation.streamlit.constants import available_models
 from src.utils.resources import ResourceLoader
 
 st.set_page_config(layout="wide")
 
-available_models = {
-    "ChatGPT-4": {"is_enabled": False, "name": "gpt-4"},
-    "ChatGPT-3.5": {"is_enabled": False, "name": "gpt-3.5-turbo"},
-    "GPT-3": {"is_enabled": False, "name": "text-davinci-003"},
-    "GPT-3.5 Instruct": {
-        "is_enabled": False,
-        "name": "gpt-3.5-turbo-instruct",
-    },
-    "Code Llama": {"is_enabled": True, "name": "CodeLlama-34b-Instruct-hf"},
-}
-
 resource_loader = ResourceLoader()
-
 datasets_urls = resource_loader.load_json_file("dataset_urls.json")
 
 
 if "datasets" not in st.session_state:
-    datasets = {}
-    datasets["taxis"] = pd.read_csv(datasets_urls["taxis"])
-    datasets["tips"] = pd.read_csv(datasets_urls["tips"])
+    datasets_names = ["taxis", "tips"]
+    datasets = {
+        name: pd.read_csv(url)
+        for name, url in datasets_urls.items()
+        if name in datasets_names
+    }
     st.session_state["datasets"] = datasets
 else:
     datasets = st.session_state["datasets"]
+
 
 with st.sidebar:
     with st.expander(":computer: Upload a csv file (optional)"):
@@ -46,8 +43,7 @@ with st.sidebar:
             print(f"File failed to load. {error}")
 
     with st.expander(":bar_chart: Choose a dataset", expanded=True):
-        dataset_container = st.empty()
-        chosen_dataset = dataset_container.radio(
+        chosen_dataset = st.radio(
             "datasets: ", datasets.keys(), index=index_no
         )
 
@@ -57,7 +53,7 @@ with st.sidebar:
             label = f"{model_desc} ({model_properties['name']})"
             key = f"key_{model_desc}"
             use_model[model_desc] = st.checkbox(
-                label, value=model_properties["is_enabled"], key=key
+                label, value=model_properties["default_enabled"], key=key
             )
 
 
@@ -73,9 +69,9 @@ with st.container():
 
 with st.container():
     prompt = st.text_area(
-        ":eyes: What would you like to visualise?", height=10
+        ":eyes: What would you like to visualize?", height=10
     )
-    generate_viz_button = st.button("Make Viz")
+    make_viz_btn_pressed = st.button("Make me Viz")
 
 
 selected_models = [
@@ -83,9 +79,9 @@ selected_models = [
     for model_name, choose_model in use_model.items()
     if choose_model
 ]
-model_count = len(selected_models)
+selected_model_count = len(selected_models)
 
-if generate_viz_button and model_count > 0:
+if make_viz_btn_pressed and selected_model_count > 0:
     api_keys_entered = True
     # Check API keys are entered.
     if (
@@ -94,11 +90,11 @@ if generate_viz_button and model_count > 0:
         or "GPT-3" in selected_models
         or "GPT-3.5 Instruct" in selected_models
     ):
-        if not openai_api_key.startswith("sk-"):
+        if not openai_api_key_is_valid(openai_api_key):
             st.error("Please enter a valid OpenAI API key.")
             api_keys_entered = False
     if "Code Llama" in selected_models:
-        if not hugging_face_api_key.startswith("hf_"):
+        if not hugging_face_api_key_is_valid(hugging_face_api_key):
             st.error("Please enter a valid HuggingFace API key.")
             api_keys_entered = False
     if api_keys_entered:
