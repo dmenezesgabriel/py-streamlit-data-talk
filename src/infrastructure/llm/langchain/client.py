@@ -3,6 +3,20 @@ from langchain.chains import LLMChain
 from langchain.llms import HuggingFaceHub
 from langchain.prompts import PromptTemplate
 
+from src.application.ports.llm import LanguageModel
+from src.infrastructure.llm.langchain.llm import GPT4, CodeLlama, GPT35Turbo
+
+
+class LanguageModelFactory:
+    @staticmethod
+    def create_model(model_type: str, api_key: str) -> LanguageModel:
+        if model_type == "gpt-4":
+            return GPT4(api_key, model_type)
+        elif model_type == "gpt-3.5-turbo":
+            return GPT35Turbo(api_key, model_type)
+        else:
+            return CodeLlama(api_key, model_type)
+
 
 class LLMClient:
     def __init__(self, keys=None):
@@ -16,52 +30,13 @@ class LLMClient:
     def keys(self, value):
         self._keys = value
 
-    def get_viz_answer_from_prompt(self, question_to_ask, model_type):
-        if model_type == "gpt-4" or model_type == "gpt-3.5-turbo":
-            # Run OpenAI ChatCompletion API
-            task = "Generate Python Code Script."
-            if model_type == "gpt-4":
-                # Ensure GPT-4 does not include additional comments
-                task = (
-                    task + " The script should only include code, no comments."
-                )
-            openai.api_key = self.keys["openai"]
-            response = openai.ChatCompletion.create(
-                model=model_type,
-                messages=[
-                    {"role": "system", "content": task},
-                    {"role": "user", "content": question_to_ask},
-                ],
-            )
-            llm_response = response["choices"][0]["message"]["content"]
-        elif (
-            model_type == "text-davinci-003"
-            or model_type == "gpt-3.5-turbo-instruct"
-        ):
-            # Run OpenAI Completion API
-            openai.api_key = self.keys["openai"]
-            response = openai.Completion.create(
-                engine=model_type,
-                prompt=question_to_ask,
-                temperature=0,
-                max_tokens=500,
-                top_p=1.0,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-                stop=["plt.show()"],
-            )
-            llm_response = response["choices"][0]["text"]
-        else:
-            # Hugging Face model
-            llm = HuggingFaceHub(
-                huggingfacehub_api_token=self.keys["huggingface"],
-                repo_id="codellama/" + model_type,
-                model_kwargs={"temperature": 0.1, "max_new_tokens": 500},
-            )
-            llm_prompt = PromptTemplate.from_template(question_to_ask)
-            llm_chain = LLMChain(llm=llm, prompt=llm_prompt)
-            llm_response = llm_chain.predict()
-        return llm_response
-
-    def get_text_answer_from_prompt(self, question_to_ask, model_type):
-        raise NotImplementedError
+    def ask_question(self, question_to_ask, model_type):
+        key_map = {
+            "gpt-4": "openapi",
+            "gpt-3.5-turbo": "openapi",
+            "CodeLlama-34b-Instruct-hf": "huggingface",
+        }
+        model = LanguageModelFactory.create_model(
+            model_type, self.keys.get(key_map[model_type], "")
+        )
+        return model.ask_question(question_to_ask)

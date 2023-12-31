@@ -105,7 +105,6 @@ selected_model_count = len(selected_models)
 
 if make_viz_btn_pressed and selected_model_count > 0:
     api_keys_entered = True
-    # Check API keys are entered.
     if (
         "ChatGPT-4" in selected_models
         or "ChatGPT-3.5" in selected_models
@@ -127,14 +126,11 @@ if make_viz_btn_pressed and selected_model_count > 0:
             "huggingface": hugging_face_api_key,
         }
         llm_service = LLMService(llm_client)
-        # Place for plots depending on how many models
         plots = st.columns(selected_model_count)
-        # Get the primer for this dataset
         expected_description = make_dataset_description(
             datasets[chosen_dataset]
         )
         code_to_execute = make_viz_code('datasets["' + chosen_dataset + '"]')
-        # Create model, run the request and print the results
         for plot_num, model_type in enumerate(selected_models):
             with plots[plot_num]:
                 st.subheader(model_type)
@@ -145,26 +141,33 @@ if make_viz_btn_pressed and selected_model_count > 0:
                         code_to_execute,
                         question_input,
                     )
-                    st.write(question_to_ask)
+                    with st.expander("Question"):
+                        st.code(question_to_ask, language="markdown")
                     # Run the question
                     answer = ""
-                    answer = llm_service.get_viz_answer_from_prompt(
+                    answer = llm_service.ask_question(
                         question_to_ask,
                         available_models[model_type]["name"],
                     )
                     answer = code_to_execute + answer
-                    st.write(answer)
+                    with st.expander("Answer"):
+                        st.code(answer, language="raw")
                     vega_spec_pattern = r"st\.vega_lite_chart\(.*?,\s*(.*?)\s*,\s*use_container_width=True\)"
                     match = re.search(vega_spec_pattern, answer, re.DOTALL)
-                    if match:
-                        vega_spec_dict = match.group(1)
-                        st.write(vega_spec_dict)
-                        st.vega_lite_chart(
-                            datasets[chosen_dataset],
-                            ast.literal_eval(vega_spec_dict),
-                        )
-                    else:
-                        st.write("Vega spec not found in the input string.")
+                    with st.container(border=True):
+                        st.write("Plot: ")
+                        if match:
+                            vega_spec_dict = match.group(1)
+                            with st.expander(label="Vega Spec"):
+                                st.code(vega_spec_dict, language="json")
+                            st.vega_lite_chart(
+                                datasets[chosen_dataset],
+                                ast.literal_eval(vega_spec_dict),
+                            )
+                        else:
+                            st.write(
+                                "Vega spec not found in the input string."
+                            )
                 except Exception as e:
                     st.error(e)
 
