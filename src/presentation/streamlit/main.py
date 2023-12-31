@@ -18,6 +18,10 @@ from src.infrastructure.llm.utils.api_key import (
     openai_api_key_is_valid,
 )
 from src.presentation.streamlit.constants import available_models
+from src.presentation.streamlit.session import (
+    setup_session_datasets,
+    setup_session_messages,
+)
 from src.presentation.streamlit.utils.logger import configure_st_logger
 from src.utils.resources import ResourceLoader
 
@@ -34,20 +38,8 @@ datasets_urls = resource_loader.load_json_file("dataset_urls.json")
 
 logger.info("Started")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "datasets" not in st.session_state:
-    datasets_names = ["taxis", "tips"]
-    datasets = {
-        name: pd.read_csv(url)
-        for name, url in datasets_urls.items()
-        if name in datasets_names
-    }
-    st.session_state.datasets = datasets
-else:
-    datasets = st.session_state["datasets"]
-
+setup_session_messages()
+datasets = setup_session_datasets(datasets_urls)
 
 with st.sidebar:
     with st.expander(":computer: Upload a csv file (optional)"):
@@ -105,12 +97,12 @@ selected_model_count = len(selected_models)
 
 if make_viz_btn_pressed and selected_model_count > 0:
     api_keys_entered = True
-    if (
-        "ChatGPT-4" in selected_models
-        or "ChatGPT-3.5" in selected_models
-        or "GPT-3" in selected_models
-        or "GPT-3.5 Instruct" in selected_models
-    ):
+    if selected_models in [
+        "ChatGPT-4",
+        "ChatGPT-3.5",
+        "GPT-3",
+        "GPT-3.5 Instruct",
+    ]:
         if not openai_api_key_is_valid(openai_api_key):
             st.error("Please enter a valid OpenAI API key.")
             api_keys_entered = False
