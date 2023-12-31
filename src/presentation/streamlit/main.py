@@ -1,4 +1,6 @@
+import ast
 import os
+import re
 
 import pandas as pd
 import streamlit as st
@@ -32,6 +34,9 @@ datasets_urls = resource_loader.load_json_file("dataset_urls.json")
 
 logger.info("Started")
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 if "datasets" not in st.session_state:
     datasets_names = ["taxis", "tips"]
     datasets = {
@@ -39,7 +44,7 @@ if "datasets" not in st.session_state:
         for name, url in datasets_urls.items()
         if name in datasets_names
     }
-    st.session_state["datasets"] = datasets
+    st.session_state.datasets = datasets
 else:
     datasets = st.session_state["datasets"]
 
@@ -128,9 +133,7 @@ if make_viz_btn_pressed and selected_model_count > 0:
         expected_description = make_dataset_description(
             datasets[chosen_dataset]
         )
-        code_to_execute = make_viz_code(
-            datasets[chosen_dataset], 'datasets["' + chosen_dataset + '"]'
-        )
+        code_to_execute = make_viz_code('datasets["' + chosen_dataset + '"]')
         # Create model, run the request and print the results
         for plot_num, model_type in enumerate(selected_models):
             with plots[plot_num]:
@@ -141,8 +144,8 @@ if make_viz_btn_pressed and selected_model_count > 0:
                         expected_description,
                         code_to_execute,
                         question_input,
-                        model_type,
                     )
+                    st.write(question_to_ask)
                     # Run the question
                     answer = ""
                     answer = llm_service.get_viz_answer_from_prompt(
@@ -150,13 +153,20 @@ if make_viz_btn_pressed and selected_model_count > 0:
                         available_models[model_type]["name"],
                     )
                     answer = code_to_execute + answer
-                    print("Model: " + model_type)
-                    print(answer)
-                    plot_area = st.empty()
                     st.write(answer)
-                    plot_area.pyplot(exec(answer))
+                    vega_spec_pattern = r"st\.vega_lite_chart\(.*?,\s*(.*?)\s*,\s*use_container_width=True\)"
+                    match = re.search(vega_spec_pattern, answer, re.DOTALL)
+                    if match:
+                        vega_spec_dict = match.group(1)
+                        st.write(vega_spec_dict)
+                        st.vega_lite_chart(
+                            datasets[chosen_dataset],
+                            ast.literal_eval(vega_spec_dict),
+                        )
+                    else:
+                        st.write("Vega spec not found in the input string.")
                 except Exception as e:
-                    print(e)
+                    st.error(e)
 
 tab_list = st.tabs(datasets.keys())
 for dataset_num, tab in enumerate(tab_list):
