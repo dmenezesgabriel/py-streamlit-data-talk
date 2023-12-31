@@ -16,6 +16,7 @@ from src.infrastructure.llm.utils.api_key import (
     openai_api_key_is_valid,
 )
 from src.presentation.streamlit.constants import available_models
+from src.presentation.streamlit.utils.logger import configure_st_logger
 from src.utils.resources import ResourceLoader
 
 load_dotenv()
@@ -24,9 +25,12 @@ HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 
 st.set_page_config(layout="wide")
 
+logger = configure_st_logger()
+
 resource_loader = ResourceLoader()
 datasets_urls = resource_loader.load_json_file("dataset_urls.json")
 
+logger.info("Started")
 
 if "datasets" not in st.session_state:
     datasets_names = ["taxis", "tips"]
