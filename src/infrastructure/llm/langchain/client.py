@@ -3,8 +3,6 @@ from langchain.chains import LLMChain
 from langchain.llms import HuggingFaceHub
 from langchain.prompts import PromptTemplate
 
-from src.infrastructure.llm.langchain.utils import format_response
-
 
 class LLMClient:
     def __init__(self, keys=None):
@@ -63,9 +61,7 @@ class LLMClient:
             llm_prompt = PromptTemplate.from_template(question_to_ask)
             llm_chain = LLMChain(llm=llm, prompt=llm_prompt)
             llm_response = llm_chain.predict()
-        # rejig the response
-        llm_response = format_response(llm_response)
         return llm_response
 
     def get_text_answer_from_prompt(self, question_to_ask, model_type):
-        pass
+        raise NotImplementedError

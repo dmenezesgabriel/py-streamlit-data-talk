@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 
 from src.application.services.llm import LLMService
 from src.infrastructure.llm.langchain.client import LLMClient
-from src.infrastructure.llm.langchain.utils import format_question, get_primer
+from src.infrastructure.llm.langchain.utils import (
+    format_question,
+    make_dataset_description,
+    make_viz_code,
+)
 from src.infrastructure.llm.utils.api_key import (
     hugging_face_api_key_is_valid,
     openai_api_key_is_valid,
@@ -77,7 +81,7 @@ with st.container():
 
 
 with st.container():
-    prompt = st.text_area(
+    question_input = st.text_area(
         ":eyes: What would you like to visualize?", height=10
     )
     make_viz_btn_pressed = st.button("Make me Viz")
@@ -117,7 +121,10 @@ if make_viz_btn_pressed and selected_model_count > 0:
         # Place for plots depending on how many models
         plots = st.columns(selected_model_count)
         # Get the primer for this dataset
-        primer1, primer2 = get_primer(
+        expected_description = make_dataset_description(
+            datasets[chosen_dataset]
+        )
+        code_to_execute = make_viz_code(
             datasets[chosen_dataset], 'datasets["' + chosen_dataset + '"]'
         )
         # Create model, run the request and print the results
@@ -127,7 +134,10 @@ if make_viz_btn_pressed and selected_model_count > 0:
                 try:
                     # Format the question
                     question_to_ask = format_question(
-                        primer1, primer2, prompt, model_type
+                        expected_description,
+                        code_to_execute,
+                        question_input,
+                        model_type,
                     )
                     # Run the question
                     answer = ""
@@ -135,10 +145,11 @@ if make_viz_btn_pressed and selected_model_count > 0:
                         question_to_ask,
                         available_models[model_type]["name"],
                     )
-                    answer = primer2 + answer
+                    answer = code_to_execute + answer
                     print("Model: " + model_type)
                     print(answer)
                     plot_area = st.empty()
+                    st.write(answer)
                     plot_area.pyplot(exec(answer))
                 except Exception as e:
                     print(e)
