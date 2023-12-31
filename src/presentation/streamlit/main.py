@@ -1,5 +1,8 @@
+import os
+
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 from src.application.services.llm import LLMService
 from src.infrastructure.llm.langchain.client import LLMClient
@@ -10,6 +13,10 @@ from src.infrastructure.llm.utils.api_key import (
 )
 from src.presentation.streamlit.constants import available_models
 from src.utils.resources import ResourceLoader
+
+load_dotenv()
+
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 
 st.set_page_config(layout="wide")
 
@@ -59,6 +66,7 @@ with st.sidebar:
 
 openai_key_col, huggingface_key_col2 = st.columns([1, 1])
 
+
 with st.container():
     with openai_key_col:
         openai_api_key = st.text_input(":key: OpenAI API Key", type="password")
@@ -66,6 +74,7 @@ with st.container():
         hugging_face_api_key = st.text_input(
             ":hugging_face: HuggingFace API Key", type="password"
         )
+
 
 with st.container():
     prompt = st.text_area(
@@ -94,6 +103,7 @@ if make_viz_btn_pressed and selected_model_count > 0:
             st.error("Please enter a valid OpenAI API key.")
             api_keys_entered = False
     if "Code Llama" in selected_models:
+        hugging_face_api_key = hugging_face_api_key or HUGGINGFACE_API_KEY
         if not hugging_face_api_key_is_valid(hugging_face_api_key):
             st.error("Please enter a valid HuggingFace API key.")
             api_keys_entered = False
@@ -105,7 +115,7 @@ if make_viz_btn_pressed and selected_model_count > 0:
         }
         llm_service = LLMService(llm_client)
         # Place for plots depending on how many models
-        plots = st.columns(model_count)
+        plots = st.columns(selected_model_count)
         # Get the primer for this dataset
         primer1, primer2 = get_primer(
             datasets[chosen_dataset], 'datasets["' + chosen_dataset + '"]'
