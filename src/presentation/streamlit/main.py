@@ -1,6 +1,8 @@
 import ast
 import os
+import random
 import re
+import time
 
 import pandas as pd
 import streamlit as st
@@ -41,7 +43,12 @@ logger.info("Started")
 setup_session_messages()
 datasets = setup_session_datasets(datasets_urls)
 
+st.title(":eyes: Viz your question")
 with st.sidebar:
+    openai_api_key = st.text_input(":key: OpenAI API Key", type="password")
+    hugging_face_api_key = st.text_input(
+        ":hugging_face: HuggingFace API Key", type="password"
+    )
     with st.expander(":computer: Upload a csv file (optional)"):
         index_no = 0
         try:
@@ -68,26 +75,6 @@ with st.sidebar:
                 label, value=model_properties["default_enabled"], key=key
             )
 
-
-openai_key_col, huggingface_key_col2 = st.columns([1, 1])
-
-
-with st.container():
-    with openai_key_col:
-        openai_api_key = st.text_input(":key: OpenAI API Key", type="password")
-    with huggingface_key_col2:
-        hugging_face_api_key = st.text_input(
-            ":hugging_face: HuggingFace API Key", type="password"
-        )
-
-
-with st.container():
-    question_input = st.text_area(
-        ":eyes: What would you like to visualize?", height=10
-    )
-    make_viz_btn_pressed = st.button("Make me Viz")
-
-
 selected_models = [
     model_name
     for model_name, choose_model in use_model.items()
@@ -95,80 +82,109 @@ selected_models = [
 ]
 selected_model_count = len(selected_models)
 
-if make_viz_btn_pressed and selected_model_count > 0:
-    api_keys_entered = True
-    if selected_models in [
-        "ChatGPT-4",
-        "ChatGPT-3.5",
-        "GPT-3",
-        "GPT-3.5 Instruct",
-    ]:
-        if not openai_api_key_is_valid(openai_api_key):
-            st.error("Please enter a valid OpenAI API key.")
-            api_keys_entered = False
-    if "Code Llama" in selected_models:
-        hugging_face_api_key = hugging_face_api_key or HUGGINGFACE_API_KEY
-        if not hugging_face_api_key_is_valid(hugging_face_api_key):
-            st.error("Please enter a valid HuggingFace API key.")
-            api_keys_entered = False
-    if api_keys_entered:
-        llm_client = LLMClient()
-        llm_client.keys = {
-            "openai": openai_api_key,
-            "huggingface": hugging_face_api_key,
-        }
-        llm_service = LLMService(llm_client)
-        plots = st.columns(selected_model_count)
-        expected_description = dataset_description_by_dtypes(
-            datasets[chosen_dataset]
-        )
-        code_to_execute = make_viz_code('datasets["' + chosen_dataset + '"]')
-        for plot_num, model_type in enumerate(selected_models):
-            with plots[plot_num]:
-                st.subheader(model_type)
-                try:
-                    # Format the question
-                    question_to_ask = format_question(
-                        expected_description,
-                        code_to_execute,
-                        question_input,
-                    )
-                    with st.expander("Generated Prompt:"):
-                        st.code(question_to_ask, language="markdown")
-                    # Run the question
-                    answer = ""
-                    answer = llm_service.ask_question(
-                        question_to_ask,
-                        available_models[model_type]["name"],
-                    )
-                    answer = code_to_execute + answer
-                    with st.expander("Answer"):
-                        st.code(answer, language="raw")
-                    vega_spec_pattern = r"st\.vega_lite_chart\(df, ({.*?})\)"
-                    match = re.search(vega_spec_pattern, answer, re.DOTALL)
-                    with st.container(border=True):
-                        st.write("Plot: ")
-                        if match:
-                            vega_spec_dict = match.group(1)
-                            with st.expander(label="Vega Spec"):
-                                st.code(vega_spec_dict, language="json")
-                            st.vega_lite_chart(
-                                datasets[chosen_dataset],
-                                ast.literal_eval(vega_spec_dict),
-                            )
-                        else:
-                            st.write(
-                                "Vega spec not found in the input string."
-                            )
-                except Exception as e:
-                    st.error(e)
 
-tab_list = st.tabs(datasets.keys())
-for dataset_num, tab in enumerate(tab_list):
-    with tab:
-        dataset_name = list(datasets.keys())[dataset_num]
-        st.subheader(dataset_name)
-        st.dataframe(datasets[dataset_name], hide_index=True)
+with st.expander("Datasets"):
+    tab_list = st.tabs(datasets.keys())
+    for dataset_num, tab in enumerate(tab_list):
+        with tab:
+            dataset_name = list(datasets.keys())[dataset_num]
+            st.subheader(dataset_name)
+            st.dataframe(datasets[dataset_name], hide_index=True)
+
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+
+if prompt := st.chat_input("What would you like to visualize?"):
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Display assistant response in chat message container
+    with st.chat_message("assistant"):
+        if selected_model_count > 0:
+            api_keys_entered = True
+            if selected_models in [
+                "ChatGPT-4",
+                "ChatGPT-3.5",
+                "GPT-3",
+                "GPT-3.5 Instruct",
+            ]:
+                if not openai_api_key_is_valid(openai_api_key):
+                    st.error("Please enter a valid OpenAI API key.")
+                    api_keys_entered = False
+            if "Code Llama" in selected_models:
+                hugging_face_api_key = (
+                    hugging_face_api_key or HUGGINGFACE_API_KEY
+                )
+                if not hugging_face_api_key_is_valid(hugging_face_api_key):
+                    st.error("Please enter a valid HuggingFace API key.")
+                    api_keys_entered = False
+            if api_keys_entered:
+                llm_client = LLMClient()
+                llm_client.keys = {
+                    "openai": openai_api_key,
+                    "huggingface": hugging_face_api_key,
+                }
+                llm_service = LLMService(llm_client)
+                plots = st.columns(selected_model_count)
+                expected_description = dataset_description_by_dtypes(
+                    datasets[chosen_dataset]
+                )
+                code_to_execute = make_viz_code(
+                    'datasets["' + chosen_dataset + '"]'
+                )
+                for plot_num, model_type in enumerate(selected_models):
+                    with plots[plot_num]:
+                        st.write(model_type)
+                        try:
+                            # Format the question
+                            question_to_ask = format_question(
+                                expected_description,
+                                code_to_execute,
+                                prompt,
+                            )
+                            with st.expander("Generated Prompt:"):
+                                st.code(question_to_ask, language="markdown")
+                            # Run the question
+                            answer = ""
+                            answer = llm_service.ask_question(
+                                question_to_ask,
+                                available_models[model_type]["name"],
+                            )
+                            answer = code_to_execute + answer
+                            with st.expander("Answer"):
+                                st.code(answer, language="raw")
+                            vega_spec_pattern = (
+                                r"st\.vega_lite_chart\(df, ({.*?})\)"
+                            )
+                            match = re.search(
+                                vega_spec_pattern, answer, re.DOTALL
+                            )
+                            with st.container(border=True):
+                                st.write("Plot: ")
+                                if match:
+                                    vega_spec_dict = match.group(1)
+                                    with st.expander(label="Vega Spec"):
+                                        st.code(
+                                            vega_spec_dict, language="json"
+                                        )
+                                    st.vega_lite_chart(
+                                        datasets[chosen_dataset],
+                                        ast.literal_eval(vega_spec_dict),
+                                    )
+                                else:
+                                    st.write(
+                                        "Vega spec not found in the input string."
+                                    )
+                        except Exception as e:
+                            st.error(e)
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": answer})
+
 
 #################################################################
 
