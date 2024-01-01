@@ -10,10 +10,10 @@ from dotenv import load_dotenv
 
 from src.application.services.llm import LLMService
 from src.infrastructure.llm.langchain.client import LLMClient
-from src.infrastructure.llm.langchain.utils import (
+from src.infrastructure.llm.langchain.prompt import (
     dataset_description_by_dtypes,
-    format_question,
-    make_viz_code,
+    generate_viz_prompt,
+    viz_code_prompt_template,
 )
 from src.infrastructure.llm.utils.api_key import (
     hugging_face_api_key_is_valid,
@@ -25,6 +25,7 @@ from src.presentation.streamlit.session import (
     setup_session_messages,
 )
 from src.presentation.streamlit.utils.logger import configure_st_logger
+from src.presentation.streamlit.utils.vega_lite import extract_spec_from_string
 from src.utils.resources import ResourceLoader
 
 load_dotenv()
@@ -38,10 +39,29 @@ logger = configure_st_logger()
 resource_loader = ResourceLoader()
 datasets_urls = resource_loader.load_json_file("dataset_urls.json")
 
-logger.info("Started")
+logger.info("Visited main page")
 
 setup_session_messages()
-datasets = setup_session_datasets(datasets_urls)
+setup_session_datasets(datasets_urls)
+
+llm_client = LLMClient()
+llm_service = LLMService(llm_client)
+
+
+def render_plot_from_model_response(model_response: str):
+    st.write("Plot: ")
+    chart_spec = extract_spec_from_string(model_response)
+    if chart_spec:
+        with st.expander(label="Vega Spec"):
+            st.code(chart_spec, language="json")
+
+        st.vega_lite_chart(
+            st.session_state.datasets[chosen_dataset],
+            ast.literal_eval(chart_spec),
+        )
+    else:
+        st.warning("Vega spec not found in the input string.")
+
 
 st.title(":eyes: Viz your question")
 with st.sidebar:
@@ -55,15 +75,17 @@ with st.sidebar:
             uploaded_file = st.file_uploader("Upload a csv file: ", type="csv")
             if uploaded_file:
                 file_name = uploaded_file.name[:-4].capitalize()
-                datasets[file_name] = pd.read_csv(uploaded_file)
-                index_no = len(datasets) - 1
+                st.session_state.datasets[file_name] = pd.read_csv(
+                    uploaded_file
+                )
+                index_no = len(st.session_state.datasets) - 1
         except Exception as error:
             st.error("Failed to load file, please upload a valid csv")
             print(f"File failed to load. {error}")
 
     with st.expander(":bar_chart: Choose a dataset", expanded=True):
         chosen_dataset = st.radio(
-            "datasets: ", datasets.keys(), index=index_no
+            "datasets: ", st.session_state.datasets.keys(), index=index_no
         )
 
     with st.expander(":brain: Choose your model(s): ", expanded=True):
@@ -84,12 +106,14 @@ selected_model_count = len(selected_models)
 
 
 with st.expander("Datasets"):
-    tab_list = st.tabs(datasets.keys())
+    tab_list = st.tabs(st.session_state.datasets.keys())
     for dataset_num, tab in enumerate(tab_list):
         with tab:
-            dataset_name = list(datasets.keys())[dataset_num]
+            dataset_name = list(st.session_state.datasets.keys())[dataset_num]
             st.subheader(dataset_name)
-            st.dataframe(datasets[dataset_name], hide_index=True)
+            st.dataframe(
+                st.session_state.datasets[dataset_name], hide_index=True
+            )
 
 
 for message in st.session_state.messages:
@@ -98,21 +122,14 @@ for message in st.session_state.messages:
 
 
 if prompt := st.chat_input("What would you like to visualize?"):
-    # Display user message in chat message container
     with st.chat_message("user"):
         st.markdown(prompt)
-    # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display assistant response in chat message container
     with st.chat_message("assistant"):
         if selected_model_count > 0:
             api_keys_entered = True
-            if selected_models in [
-                "ChatGPT-4",
-                "ChatGPT-3.5",
-                "GPT-3",
-                "GPT-3.5 Instruct",
-            ]:
+
+            if selected_models in list(available_models.keys()):
                 if not openai_api_key_is_valid(openai_api_key):
                     st.error("Please enter a valid OpenAI API key.")
                     api_keys_entered = False
@@ -124,33 +141,26 @@ if prompt := st.chat_input("What would you like to visualize?"):
                     st.error("Please enter a valid HuggingFace API key.")
                     api_keys_entered = False
             if api_keys_entered:
-                llm_client = LLMClient()
                 llm_client.keys = {
                     "openai": openai_api_key,
                     "huggingface": hugging_face_api_key,
                 }
-                llm_service = LLMService(llm_client)
                 plots = st.columns(selected_model_count)
-                expected_description = dataset_description_by_dtypes(
-                    datasets[chosen_dataset]
+                dataset_description = dataset_description_by_dtypes(
+                    st.session_state.datasets[chosen_dataset]
                 )
-                code_to_execute = make_viz_code(
-                    'datasets["' + chosen_dataset + '"]'
+                code_to_execute = viz_code_prompt_template()
+                question_to_ask = generate_viz_prompt(
+                    dataset_description,
+                    code_to_execute,
+                    prompt,
                 )
                 for plot_num, model_type in enumerate(selected_models):
                     with plots[plot_num]:
                         st.write(model_type)
                         try:
-                            # Format the question
-                            question_to_ask = format_question(
-                                expected_description,
-                                code_to_execute,
-                                prompt,
-                            )
                             with st.expander("Generated Prompt:"):
                                 st.code(question_to_ask, language="markdown")
-                            # Run the question
-                            answer = ""
                             answer = llm_service.ask_question(
                                 question_to_ask,
                                 available_models[model_type]["name"],
@@ -158,31 +168,10 @@ if prompt := st.chat_input("What would you like to visualize?"):
                             answer = code_to_execute + answer
                             with st.expander("Answer"):
                                 st.code(answer, language="raw")
-                            vega_spec_pattern = (
-                                r"st\.vega_lite_chart\(df, ({.*?})\)"
-                            )
-                            match = re.search(
-                                vega_spec_pattern, answer, re.DOTALL
-                            )
                             with st.container(border=True):
-                                st.write("Plot: ")
-                                if match:
-                                    vega_spec_dict = match.group(1)
-                                    with st.expander(label="Vega Spec"):
-                                        st.code(
-                                            vega_spec_dict, language="json"
-                                        )
-                                    st.vega_lite_chart(
-                                        datasets[chosen_dataset],
-                                        ast.literal_eval(vega_spec_dict),
-                                    )
-                                else:
-                                    st.write(
-                                        "Vega spec not found in the input string."
-                                    )
+                                render_plot_from_model_response(answer)
                         except Exception as e:
                             st.error(e)
-    # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
 

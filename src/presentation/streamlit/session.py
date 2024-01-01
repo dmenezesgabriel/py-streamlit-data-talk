@@ -16,6 +16,3 @@ def setup_session_datasets(datasets_urls: dict):
             if name in datasets_names
         }
         st.session_state.datasets = datasets
-    else:
-        datasets = st.session_state["datasets"]
-    return datasets
