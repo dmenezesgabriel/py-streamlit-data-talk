@@ -1,43 +1,29 @@
+from textwrap import dedent
+
 import pandas as pd
 
 
-def format_question(
-    expected_description: str, viz_code: str, question: str
-) -> str:
-    instructions = "\n\nusing the following query: "
-    expected_description = expected_description.format(instructions)
-    return '"""\n' + expected_description + question + '\n"""\n\n' + viz_code
-
-
-def describe_dataframe_columns(dataframe: pd.DataFrame) -> str:
-    columns = "'" + "', '".join(str(x) for x in dataframe.columns) + "'"
+def format_question(df_description: str, viz_code: str, question: str) -> str:
+    instructions = "\n\nGenerate a chart with the following query: "
     return (
-        "Use a dataframe called df from data_file.csv with columns: \n\n"
-        f"{columns}"
-        ". "
-        "\n\n"
+        '"""\n'
+        + df_description
+        + instructions
+        + question
+        + '\n"""\n\n'
+        + viz_code
     )
 
 
-def make_dataset_description(df_dataset) -> str:
-    primer_desc = describe_dataframe_columns(df_dataset)
-    for i in df_dataset.columns:
-        if df_dataset.dtypes[i] == "O":
-            primer_desc += (
-                "\n\n- The column '" + i + "' has categorical values"
-            )
-        elif (
-            df_dataset.dtypes[i] == "int64"
-            or df_dataset.dtypes[i] == "float64"
-        ):
-            primer_desc += (
-                "\n\n- The column '"
-                + i
-                + "' is type "
-                + str(df_dataset.dtypes[i])
-            )
-    primer_desc = primer_desc + "{}"
-    return primer_desc
+def dataset_description_by_dtypes(df_dataset: pd.DataFrame) -> str:
+    return dedent(
+        f"""
+        Use a dataframe called df from data_file.csv.
+        This is the result of `print(df.dtypes)`:
+
+        {str(df_dataset.dtypes.to_markdown())}
+        """
+    )
 
 
 def make_viz_code(df_name):

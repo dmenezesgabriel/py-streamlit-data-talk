@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 from src.application.services.llm import LLMService
 from src.infrastructure.llm.langchain.client import LLMClient
 from src.infrastructure.llm.langchain.utils import (
+    dataset_description_by_dtypes,
     format_question,
-    make_dataset_description,
     make_viz_code,
 )
 from src.infrastructure.llm.utils.api_key import (
@@ -119,7 +119,7 @@ if make_viz_btn_pressed and selected_model_count > 0:
         }
         llm_service = LLMService(llm_client)
         plots = st.columns(selected_model_count)
-        expected_description = make_dataset_description(
+        expected_description = dataset_description_by_dtypes(
             datasets[chosen_dataset]
         )
         code_to_execute = make_viz_code('datasets["' + chosen_dataset + '"]')
@@ -133,7 +133,7 @@ if make_viz_btn_pressed and selected_model_count > 0:
                         code_to_execute,
                         question_input,
                     )
-                    with st.expander("Question"):
+                    with st.expander("Generated Prompt:"):
                         st.code(question_to_ask, language="markdown")
                     # Run the question
                     answer = ""
@@ -144,7 +144,7 @@ if make_viz_btn_pressed and selected_model_count > 0:
                     answer = code_to_execute + answer
                     with st.expander("Answer"):
                         st.code(answer, language="raw")
-                    vega_spec_pattern = r"st\.vega_lite_chart\(.*?,\s*(.*?)\s*,\s*use_container_width=True\)"
+                    vega_spec_pattern = r"st\.vega_lite_chart\(df, ({.*?})\)"
                     match = re.search(vega_spec_pattern, answer, re.DOTALL)
                     with st.container(border=True):
                         st.write("Plot: ")
