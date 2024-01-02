@@ -28,6 +28,43 @@ def set_and_handle_api_key(llm_client, provider, api_key):
         st.error(error)
 
 
+def render_assistant_answer(
+    selected_models,
+    question_to_ask,
+    llm_service,
+    code_to_execute,
+    chosen_dataset,
+):
+    plots = st.columns(len(selected_models))
+    for plot_num, model_type in enumerate(selected_models):
+        with plots[plot_num]:
+            st.write(model_type)
+            try:
+                with st.expander("Generated Prompt:"):
+                    st.code(question_to_ask, language="markdown")
+                answer = llm_service.ask_question(
+                    question_to_ask,
+                    available_models[model_type]["name"],
+                )
+                answer = code_to_execute + answer
+                with st.expander("Answer"):
+                    st.code(answer, language="raw")
+                with st.container(border=True):
+                    render_plot_from_model_response(
+                        answer,
+                        st.session_state.datasets[chosen_dataset],
+                    )
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": answer,
+                        "chosen_dataset": chosen_dataset,
+                    }
+                )
+            except Exception as e:
+                st.error(e)
+
+
 def main():
     load_dotenv()
 
@@ -92,7 +129,6 @@ def main():
         for model_name, choose_model in use_model.items()
         if choose_model
     ]
-    selected_model_count = len(selected_models)
 
     if huggingface_api_key:
         set_and_handle_api_key(llm_client, "huggingface", huggingface_api_key)
@@ -114,47 +150,35 @@ def main():
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            if message["role"] == "user":
+                st.markdown(message["content"])
+            if message["role"] == "assistant":
+                render_plot_from_model_response(
+                    message["content"],
+                    st.session_state.datasets[message["chosen_dataset"]],
+                )
 
     if prompt := st.chat_input("What would you like to visualize?"):
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("assistant"):
-            if selected_model_count > 0:
-                plots = st.columns(selected_model_count)
-                dataset_description = dataset_description_by_dtypes(
-                    st.session_state.datasets[chosen_dataset]
-                )
-                code_to_execute = viz_code_prompt_template()
-                question_to_ask = generate_viz_prompt(
-                    dataset_description,
-                    code_to_execute,
-                    prompt,
-                )
-                for plot_num, model_type in enumerate(selected_models):
-                    with plots[plot_num]:
-                        st.write(model_type)
-                        try:
-                            with st.expander("Generated Prompt:"):
-                                st.code(question_to_ask, language="markdown")
-                            answer = llm_service.ask_question(
-                                question_to_ask,
-                                available_models[model_type]["name"],
-                            )
-                            answer = code_to_execute + answer
-                            with st.expander("Answer"):
-                                st.code(answer, language="raw")
-                            with st.container(border=True):
-                                render_plot_from_model_response(
-                                    answer,
-                                    st.session_state.datasets[chosen_dataset],
-                                )
-                            st.session_state.messages.append(
-                                {"role": "assistant", "content": answer}
-                            )
-                        except Exception as e:
-                            st.error(e)
+            dataset_description = dataset_description_by_dtypes(
+                st.session_state.datasets[chosen_dataset]
+            )
+            code_to_execute = viz_code_prompt_template()
+            question_to_ask = generate_viz_prompt(
+                dataset_description,
+                code_to_execute,
+                prompt,
+            )
+            render_assistant_answer(
+                selected_models,
+                question_to_ask,
+                llm_service,
+                code_to_execute,
+                chosen_dataset,
+            )
 
 
 #################################################################
