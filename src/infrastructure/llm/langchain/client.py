@@ -1,3 +1,5 @@
+import os
+
 from application.ports.llm import LanguageModel
 from infrastructure.llm.langchain.llm import GPT4, CodeLlama, GPT35Turbo
 
@@ -24,6 +26,12 @@ class LLMClient:
     @keys.setter
     def keys(self, value):
         self._keys = value
+
+    def load_api_keys_from_environment(self):
+        self._keys = {
+            "openai": os.getenv("OPENAI_API_KEY"),
+            "huggingface": os.getenv("HUGGINGFACE_API_KEY"),
+        }
 
     def ask_question(self, question_to_ask, model_type):
         key_map = {

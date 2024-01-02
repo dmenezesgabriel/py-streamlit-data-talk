@@ -1,6 +1,3 @@
-import ast
-import os
-
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
@@ -22,15 +19,14 @@ from presentation.streamlit.session import (
     setup_session_messages,
 )
 from presentation.streamlit.utils.logger import configure_st_logger
-from presentation.streamlit.utils.vega_lite import extract_spec_from_string
+from presentation.streamlit.utils.vega_lite import (
+    render_plot_from_model_response,
+)
 from utils.resources import ResourceLoader
 
 
 def main():
     load_dotenv()
-
-    HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
-
     st.set_page_config(layout="wide")
 
     logger = configure_st_logger()
@@ -45,20 +41,6 @@ def main():
 
     llm_client = LLMClient()
     llm_service = LLMService(llm_client)
-
-    def render_plot_from_model_response(model_response: str):
-        st.write("Plot: ")
-        chart_spec = extract_spec_from_string(model_response)
-        if chart_spec:
-            with st.expander(label="Vega Spec"):
-                st.code(chart_spec, language="json")
-
-            st.vega_lite_chart(
-                st.session_state.datasets[chosen_dataset],
-                ast.literal_eval(chart_spec),
-            )
-        else:
-            st.warning("Vega spec not found in the input string.")
 
     def set_llm_service_huggingface_api_key(text_input_key: str):
         if not llm_client.keys:
@@ -152,9 +134,7 @@ def main():
                         st.error("Please enter a valid OpenAI API key.")
                         api_keys_entered = False
                 if "Code Llama" in selected_models:
-                    hugging_face_api_key = (
-                        hugging_face_api_key or HUGGINGFACE_API_KEY
-                    )
+                    hugging_face_api_key = hugging_face_api_key
                     if not hugging_face_api_key_is_valid(hugging_face_api_key):
                         st.error("Please enter a valid HuggingFace API key.")
                         api_keys_entered = False
@@ -189,7 +169,12 @@ def main():
                                 with st.expander("Answer"):
                                     st.code(answer, language="raw")
                                 with st.container(border=True):
-                                    render_plot_from_model_response(answer)
+                                    render_plot_from_model_response(
+                                        answer,
+                                        st.session_state.datasets[
+                                            chosen_dataset
+                                        ],
+                                    )
                             except Exception as e:
                                 st.error(e)
         st.session_state.messages.append(
