@@ -1,8 +1,5 @@
 import ast
 import os
-import random
-import re
-import time
 
 import pandas as pd
 import streamlit as st
@@ -63,11 +60,33 @@ def render_plot_from_model_response(model_response: str):
         st.warning("Vega spec not found in the input string.")
 
 
+def set_llm_service_huggingface_api_key(text_input_key: str):
+    if not llm_client.keys:
+        llm_client.keys = {}
+    llm_client.keys["huggingface"] = st.session_state[text_input_key]
+
+
+def set_llm_service_openapi_api_key(text_input_key: str):
+    if not llm_client.keys:
+        llm_client.keys = {}
+    llm_client.keys["openai"] = st.session_state[text_input_key]
+
+
 st.title(":eyes: Viz your question")
 with st.sidebar:
-    openai_api_key = st.text_input(":key: OpenAI API Key", type="password")
+    openai_api_key = st.text_input(
+        ":key: OpenAI API Key",
+        type="password",
+        key="openai_api_key_input",
+        on_change=set_llm_service_openapi_api_key,
+        args=("openai_api_key_input",),
+    )
     hugging_face_api_key = st.text_input(
-        ":hugging_face: HuggingFace API Key", type="password"
+        ":hugging_face: HuggingFace API Key",
+        type="password",
+        key="huggingface_api_key_input",
+        on_change=set_llm_service_huggingface_api_key,
+        args=("huggingface_api_key_input",),
     )
     with st.expander(":computer: Upload a csv file (optional)"):
         index_no = 0
