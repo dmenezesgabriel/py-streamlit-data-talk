@@ -1,6 +1,6 @@
 import streamlit as st
 
-from src.infrastructure.logger.logger import configure_logger
+from infrastructure.logger.logger import configure_logger
 
 
 @st.cache_resource
