@@ -9,10 +9,6 @@ from infrastructure.llm.langchain.prompt import (
     generate_viz_prompt,
     viz_code_prompt_template,
 )
-from infrastructure.llm.utils.api_key import (
-    hugging_face_api_key_is_valid,
-    openai_api_key_is_valid,
-)
 from presentation.streamlit.constants import available_models
 from presentation.streamlit.session import (
     setup_session_datasets,
@@ -25,8 +21,16 @@ from presentation.streamlit.utils.vega_lite import (
 from utils.resources import ResourceLoader
 
 
+def set_and_handle_api_key(llm_client, provider, api_key):
+    try:
+        llm_client.set_api_key(provider, api_key)
+    except ValueError as error:
+        st.error(error)
+
+
 def main():
     load_dotenv()
+
     st.set_page_config(layout="wide")
 
     logger = configure_st_logger()
@@ -41,32 +45,17 @@ def main():
 
     llm_client = LLMClient()
     llm_service = LLMService(llm_client)
-
-    def set_llm_service_huggingface_api_key(text_input_key: str):
-        if not llm_client.keys:
-            llm_client.keys = {}
-        llm_client.keys["huggingface"] = st.session_state[text_input_key]
-
-    def set_llm_service_openapi_api_key(text_input_key: str):
-        if not llm_client.keys:
-            llm_client.keys = {}
-        llm_client.keys["openai"] = st.session_state[text_input_key]
+    llm_client.load_api_keys_from_environment()
 
     st.title(":eyes: Viz your question")
     with st.sidebar:
-        openai_api_key = st.text_input(
+        openapi_api_key = st.text_input(
             ":key: OpenAI API Key",
             type="password",
-            key="openai_api_key_input",
-            on_change=set_llm_service_openapi_api_key,
-            args=("openai_api_key_input",),
         )
-        hugging_face_api_key = st.text_input(
+        huggingface_api_key = st.text_input(
             ":hugging_face: HuggingFace API Key",
             type="password",
-            key="huggingface_api_key_input",
-            on_change=set_llm_service_huggingface_api_key,
-            args=("huggingface_api_key_input",),
         )
         with st.expander(":computer: Upload a csv file (optional)"):
             index_no = 0
@@ -105,6 +94,12 @@ def main():
     ]
     selected_model_count = len(selected_models)
 
+    if huggingface_api_key:
+        set_and_handle_api_key(llm_client, "huggingface", huggingface_api_key)
+
+    if openapi_api_key:
+        set_and_handle_api_key(llm_client, "openapi", openapi_api_key)
+
     with st.expander("Datasets"):
         tab_list = st.tabs(st.session_state.datasets.keys())
         for dataset_num, tab in enumerate(tab_list):
@@ -127,59 +122,39 @@ def main():
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("assistant"):
             if selected_model_count > 0:
-                api_keys_entered = True
-
-                if selected_models in list(available_models.keys()):
-                    if not openai_api_key_is_valid(openai_api_key):
-                        st.error("Please enter a valid OpenAI API key.")
-                        api_keys_entered = False
-                if "Code Llama" in selected_models:
-                    hugging_face_api_key = hugging_face_api_key
-                    if not hugging_face_api_key_is_valid(hugging_face_api_key):
-                        st.error("Please enter a valid HuggingFace API key.")
-                        api_keys_entered = False
-                if api_keys_entered:
-                    llm_client.keys = {
-                        "openai": openai_api_key,
-                        "huggingface": hugging_face_api_key,
-                    }
-                    plots = st.columns(selected_model_count)
-                    dataset_description = dataset_description_by_dtypes(
-                        st.session_state.datasets[chosen_dataset]
-                    )
-                    code_to_execute = viz_code_prompt_template()
-                    question_to_ask = generate_viz_prompt(
-                        dataset_description,
-                        code_to_execute,
-                        prompt,
-                    )
-                    for plot_num, model_type in enumerate(selected_models):
-                        with plots[plot_num]:
-                            st.write(model_type)
-                            try:
-                                with st.expander("Generated Prompt:"):
-                                    st.code(
-                                        question_to_ask, language="markdown"
-                                    )
-                                answer = llm_service.ask_question(
-                                    question_to_ask,
-                                    available_models[model_type]["name"],
+                plots = st.columns(selected_model_count)
+                dataset_description = dataset_description_by_dtypes(
+                    st.session_state.datasets[chosen_dataset]
+                )
+                code_to_execute = viz_code_prompt_template()
+                question_to_ask = generate_viz_prompt(
+                    dataset_description,
+                    code_to_execute,
+                    prompt,
+                )
+                for plot_num, model_type in enumerate(selected_models):
+                    with plots[plot_num]:
+                        st.write(model_type)
+                        try:
+                            with st.expander("Generated Prompt:"):
+                                st.code(question_to_ask, language="markdown")
+                            answer = llm_service.ask_question(
+                                question_to_ask,
+                                available_models[model_type]["name"],
+                            )
+                            answer = code_to_execute + answer
+                            with st.expander("Answer"):
+                                st.code(answer, language="raw")
+                            with st.container(border=True):
+                                render_plot_from_model_response(
+                                    answer,
+                                    st.session_state.datasets[chosen_dataset],
                                 )
-                                answer = code_to_execute + answer
-                                with st.expander("Answer"):
-                                    st.code(answer, language="raw")
-                                with st.container(border=True):
-                                    render_plot_from_model_response(
-                                        answer,
-                                        st.session_state.datasets[
-                                            chosen_dataset
-                                        ],
-                                    )
-                            except Exception as e:
-                                st.error(e)
-        st.session_state.messages.append(
-            {"role": "assistant", "content": answer}
-        )
+                            st.session_state.messages.append(
+                                {"role": "assistant", "content": answer}
+                            )
+                        except Exception as e:
+                            st.error(e)
 
 
 #################################################################
