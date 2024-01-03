@@ -6,22 +6,26 @@ import pandas as pd
 def generate_viz_prompt(
     df_description: str, viz_code: str, question: str
 ) -> str:
-    instructions = "\n\nGenerate a chart with the following query: "
-    return (
-        '"""\n'
-        + df_description
-        + instructions
-        + question
-        + '\n"""\n\n'
-        + viz_code
+    instructions = dedent(
+        """
+        Your task is to generate chart configuration for the given dataset and user.
+        Responses should be in JSON format compliant to the following JSON Schema.
+        User question:
+        """
+    )
+    return dedent(
+        f"""
+        {df_description}
+        {instructions} {question}
+        {viz_code}
+        """
     )
 
 
 def dataset_description_by_dtypes(df_dataset: pd.DataFrame) -> str:
     return dedent(
         f"""
-        Use a dataframe called df from data_file.csv.
-        This is the result of `print(df.dtypes)`:
+        Use a dataframe called df from data_file.csv. This is the result of `print(df.dtypes)`:
 
         {str(df_dataset.dtypes.to_markdown())}
         """
