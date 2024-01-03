@@ -8,8 +8,8 @@ def generate_viz_prompt(
 ) -> str:
     instructions = dedent(
         """
-        Your task is to generate chart configuration for the given dataset and user.
-        Responses should be in JSON format compliant to the following JSON Schema.
+        Generate chart configuration for the given dataset based on a user
+        question.
         User question:
         """
     )

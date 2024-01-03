@@ -55,8 +55,8 @@ class CodeLlama(LanguageModel):
         llm = HuggingFaceHub(
             huggingfacehub_api_token=self.api_key,
             repo_id="codellama/" + self.model_type,
-            model_kwargs={"temperature": 0.1, "max_new_tokens": 500},
+            model_kwargs={"max_new_tokens": 500},
         )
         llm_prompt = PromptTemplate.from_template(question_to_ask)
-        llm_chain = LLMChain(llm=llm, prompt=llm_prompt)
+        llm_chain = LLMChain(llm=llm, prompt=llm_prompt, verbose=True)
         return llm_chain.predict()
