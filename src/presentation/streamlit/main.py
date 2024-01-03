@@ -84,16 +84,18 @@ def main():
     llm_service = LLMService(llm_client)
     llm_client.load_api_keys_from_environment()
 
-    st.title(":eyes: Viz your question")
+    st.header(":eyes: Viz your question", divider="rainbow")
+
     with st.sidebar:
-        openapi_api_key = st.text_input(
-            ":key: OpenAI API Key",
-            type="password",
-        )
-        huggingface_api_key = st.text_input(
-            ":hugging_face: HuggingFace API Key",
-            type="password",
-        )
+        with st.expander("Api Keys", expanded=True):
+            openapi_api_key = st.text_input(
+                ":key: OpenAI API Key",
+                type="password",
+            )
+            huggingface_api_key = st.text_input(
+                ":hugging_face: HuggingFace API Key",
+                type="password",
+            )
         with st.expander(":computer: Upload a csv file (optional)"):
             index_no = 0
             try:
@@ -123,12 +125,6 @@ def main():
                 use_model[model_desc] = st.checkbox(
                     label, value=model_properties["default_enabled"], key=key
                 )
-
-    selected_models = [
-        model_name
-        for model_name, choose_model in use_model.items()
-        if choose_model
-    ]
 
     if huggingface_api_key:
         set_and_handle_api_key(llm_client, "huggingface", huggingface_api_key)
@@ -172,6 +168,11 @@ def main():
                 code_to_execute,
                 prompt,
             )
+            selected_models = [
+                model_name
+                for model_name, choose_model in use_model.items()
+                if choose_model
+            ]
             render_assistant_answer(
                 selected_models,
                 question_to_ask,
